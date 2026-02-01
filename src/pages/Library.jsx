@@ -1,251 +1,137 @@
 import React, { useState, useEffect } from 'react';
-import { Library as LibraryIcon, Trash2, BookOpen, AlertCircle, Download } from 'lucide-react';
-import { jsPDF } from 'jspdf';
+import { Library as LibraryIcon, Plus, BookOpen, AlertCircle, ArrowLeft, Trash2, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import './Library.css';
 
 function Library() {
-  const [vocabularyLists, setVocabularyLists] = useState([]);
-  const [selectedList, setSelectedList] = useState(null);
-  const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
+  const navigate = useNavigate();
+  const [books, setBooks] = useState([]);
+  const [vocabularyPages, setVocabularyPages] = useState([]);
+  const [selectedBook, setSelectedBook] = useState(null);
+  const [showCreateBookDialog, setShowCreateBookDialog] = useState(false);
+  const [newBookName, setNewBookName] = useState('');
+  const [newBookCover, setNewBookCover] = useState(null);
+  const [draggedPage, setDraggedPage] = useState(null);
 
   useEffect(() => {
-    loadVocabularyLists();
+    loadData();
   }, []);
 
-  useEffect(() => {
-    if (selectedList) {
-      generatePDF(selectedList);
-    } else {
-      if (pdfBlobUrl) {
-        URL.revokeObjectURL(pdfBlobUrl);
-        setPdfBlobUrl(null);
-      }
-    }
-
-    return () => {
-      if (pdfBlobUrl) {
-        URL.revokeObjectURL(pdfBlobUrl);
-      }
-    };
-  }, [selectedList]);
-
-  const loadVocabularyLists = () => {
-    const lists = JSON.parse(localStorage.getItem('vocabulary_lists') || '[]');
-    setVocabularyLists(lists);
+  const loadData = () => {
+    const savedBooks = JSON.parse(localStorage.getItem('vocabulary_books') || '[]');
+    const savedPages = JSON.parse(localStorage.getItem('vocabulary_lists') || '[]');
+    setBooks(savedBooks);
+    setVocabularyPages(savedPages);
   };
 
-  const calculateGradingScale = (totalPoints) => {
-    // NRW Gymnasium Notenskala (Prozentsätze)
-    const gradePercentages = [
-      { grade: '1 (sehr gut)', min: 87, max: 100 },
-      { grade: '2 (gut)', min: 73, max: 86 },
-      { grade: '3 (befriedigend)', min: 59, max: 72 },
-      { grade: '4 (ausreichend)', min: 45, max: 58 },
-      { grade: '5 (mangelhaft)', min: 18, max: 44 },
-      { grade: '6 (ungenügend)', min: 0, max: 17 }
-    ];
-
-    return gradePercentages.map(({ grade, min, max }) => {
-      const minPoints = Math.ceil((min / 100) * totalPoints);
-      const maxPoints = Math.floor((max / 100) * totalPoints);
-      return {
-        grade,
-        pointRange: minPoints === maxPoints ? `${minPoints}` : `${minPoints} - ${maxPoints}`,
-        minPoints,
-        maxPoints
-      };
-    });
-  };
-
-  const generatePDF = (list) => {
-    if (!list || !list.vocabularyPairs || list.vocabularyPairs.length === 0) {
+  const handleCreateBook = () => {
+    if (!newBookName.trim()) {
+      alert('Bitte geben Sie einen Buchnamen ein');
       return;
     }
 
-    try {
-      const doc = new jsPDF();
-      
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 20;
-      const leftColumnWidth = 80;
-      const rightColumnStart = margin + leftColumnWidth + 10;
-      const lineHeight = 12;
-      const startY = 60;
-      const maxLinesPerPage = Math.floor((pageHeight - startY - 20) / lineHeight);
+    const newBook = {
+      id: Date.now().toString(),
+      name: newBookName.trim(),
+      cover: newBookCover,
+      pageIds: [],
+      createdAt: new Date().toISOString()
+    };
 
-      let currentY = startY;
+    const updatedBooks = [...books, newBook];
+    localStorage.setItem('vocabulary_books', JSON.stringify(updatedBooks));
+    setBooks(updatedBooks);
+    setShowCreateBookDialog(false);
+    setNewBookName('');
+    setNewBookCover(null);
+  };
 
-      const addHeader = () => {
-        doc.setFontSize(20);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Vokabeltest', pageWidth / 2, 20, { align: 'center' });
-
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'normal');
-        doc.text(list.name, pageWidth / 2, 32, { align: 'center' });
-
-        doc.setFontSize(10);
-        const dateStr = new Date().toLocaleDateString('de-DE', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        });
-        doc.text(`Datum: ${dateStr}`, pageWidth / 2, 42, { align: 'center' });
-
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Deutsch', margin, 52);
-        doc.text('Englisch (zum Ausfüllen)', rightColumnStart, 52);
-
-        doc.setLineWidth(0.5);
-        doc.setDrawColor(100, 100, 100);
-        doc.line(margin, 54, pageWidth - margin, 54);
+  const handleCoverUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewBookCover(reader.result);
       };
-
-      addHeader();
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(11);
-
-      list.vocabularyPairs.forEach((pair, index) => {
-        if (index > 0 && index % maxLinesPerPage === 0) {
-          doc.addPage();
-          currentY = startY;
-          addHeader();
-        }
-
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${index + 1}. ${pair.german}`, margin, currentY);
-
-        doc.setDrawColor(200, 200, 200);
-        doc.setLineWidth(0.3);
-        doc.line(rightColumnStart, currentY + 1, pageWidth - margin, currentY + 1);
-
-        doc.setDrawColor(150, 150, 150);
-        doc.setLineWidth(0.2);
-        doc.line(margin + leftColumnWidth + 5, currentY - 8, margin + leftColumnWidth + 5, currentY + 2);
-
-        currentY += lineHeight;
-      });
-
-      // Add grading scale section
-      const totalPoints = list.vocabularyPairs.length;
-      const gradingScale = calculateGradingScale(totalPoints);
-
-      // Add some space before grading scale
-      currentY += 15;
-
-      // Check if we need a new page for grading scale
-      const gradingScaleHeight = 80; // Approximate height needed
-      if (currentY + gradingScaleHeight > pageHeight - 20) {
-        doc.addPage();
-        currentY = 30;
-      }
-
-      // Grading scale title
-      doc.setFontSize(14);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Bewertungsschlüssel (NRW Gymnasium)', margin, currentY);
-      currentY += 10;
-
-      // Total points info
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Gesamtpunktzahl: ${totalPoints} Punkte`, margin, currentY);
-      currentY += 8;
-
-      // Grading scale table
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      
-      // Table headers
-      const col1X = margin;
-      const col2X = margin + 50;
-      doc.text('Note', col1X, currentY);
-      doc.text('Punkte', col2X, currentY);
-      currentY += 2;
-
-      // Header line
-      doc.setLineWidth(0.5);
-      doc.setDrawColor(100, 100, 100);
-      doc.line(margin, currentY, margin + 100, currentY);
-      currentY += 5;
-
-      // Table rows
-      doc.setFont('helvetica', 'normal');
-      gradingScale.forEach((item) => {
-        doc.text(item.grade, col1X, currentY);
-        doc.text(item.pointRange, col2X, currentY);
-        currentY += 6;
-      });
-
-      // Add fields for grade and error count
-      currentY += 10;
-
-      // Box for results
-      doc.setLineWidth(0.5);
-      doc.setDrawColor(100, 100, 100);
-      doc.rect(margin, currentY, pageWidth - 2 * margin, 25);
-
-      currentY += 8;
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      
-      // Note field
-      doc.text('Note:', margin + 5, currentY);
-      doc.setFont('helvetica', 'normal');
-      doc.line(margin + 25, currentY + 1, margin + 60, currentY + 1);
-
-      // Fehleranzahl field
-      doc.text('Fehleranzahl:', pageWidth / 2 + 10, currentY);
-      doc.line(pageWidth / 2 + 45, currentY + 1, pageWidth / 2 + 80, currentY + 1);
-
-      currentY += 10;
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'italic');
-      doc.text('Erreichte Punktzahl:', margin + 5, currentY);
-      doc.setFont('helvetica', 'normal');
-      doc.line(margin + 45, currentY + 1, margin + 80, currentY + 1);
-
-      const pdfOutput = doc.output('arraybuffer');
-      const pdfBlob = new Blob([pdfOutput], { type: 'application/pdf' });
-      
-      if (pdfBlobUrl) {
-        URL.revokeObjectURL(pdfBlobUrl);
-      }
-
-      const blobUrl = URL.createObjectURL(pdfBlob);
-      setPdfBlobUrl(blobUrl);
-      
-    } catch (error) {
-      console.error('PDF generation error:', error);
+      reader.readAsDataURL(file);
     }
   };
 
-  const handleDownloadPDF = () => {
-    if (!pdfBlobUrl || !selectedList) return;
-    
-    const link = document.createElement('a');
-    link.href = pdfBlobUrl;
-    link.download = `${selectedList.name}_Vokabeltest.pdf`;
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    setTimeout(() => {
-      document.body.removeChild(link);
-    }, 100);
+  const handleDragStart = (e, page) => {
+    setDraggedPage(page);
+    e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleDeleteList = (listId) => {
-    if (window.confirm('Möchten Sie diese Vokabelliste wirklich löschen?')) {
-      const updatedLists = vocabularyLists.filter(list => list.id !== listId);
-      localStorage.setItem('vocabulary_lists', JSON.stringify(updatedLists));
-      setVocabularyLists(updatedLists);
-      if (selectedList?.id === listId) {
-        setSelectedList(null);
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDropOnBook = (e, book) => {
+    e.preventDefault();
+    if (!draggedPage) return;
+
+    // Check if page is already assigned to this book
+    if (book.pageIds.includes(draggedPage.id)) {
+      setDraggedPage(null);
+      return;
+    }
+
+    // Remove page from other books
+    const updatedBooks = books.map(b => ({
+      ...b,
+      pageIds: b.pageIds.filter(id => id !== draggedPage.id)
+    }));
+
+    // Add page to target book
+    const targetBook = updatedBooks.find(b => b.id === book.id);
+    if (targetBook) {
+      targetBook.pageIds.push(draggedPage.id);
+    }
+
+    localStorage.setItem('vocabulary_books', JSON.stringify(updatedBooks));
+    setBooks(updatedBooks);
+    setDraggedPage(null);
+  };
+
+  const handleRemovePageFromBook = (bookId, pageId) => {
+    const updatedBooks = books.map(book => {
+      if (book.id === bookId) {
+        return {
+          ...book,
+          pageIds: book.pageIds.filter(id => id !== pageId)
+        };
+      }
+      return book;
+    });
+
+    localStorage.setItem('vocabulary_books', JSON.stringify(updatedBooks));
+    setBooks(updatedBooks);
+  };
+
+  const handleDeleteBook = (bookId) => {
+    if (window.confirm('Möchten Sie dieses Buch wirklich löschen? Die Vokabelseiten bleiben erhalten.')) {
+      const updatedBooks = books.filter(book => book.id !== bookId);
+      localStorage.setItem('vocabulary_books', JSON.stringify(updatedBooks));
+      setBooks(updatedBooks);
+      if (selectedBook?.id === bookId) {
+        setSelectedBook(null);
       }
     }
+  };
+
+  const getUnassignedPages = () => {
+    const assignedPageIds = new Set();
+    books.forEach(book => {
+      book.pageIds.forEach(id => assignedPageIds.add(id));
+    });
+    return vocabularyPages.filter(page => !assignedPageIds.has(page.id));
+  };
+
+  const getBookPages = (book) => {
+    return book.pageIds
+      .map(id => vocabularyPages.find(page => page.id === id))
+      .filter(page => page !== undefined);
   };
 
   const formatDate = (dateString) => {
@@ -253,11 +139,80 @@ function Library() {
     return date.toLocaleDateString('de-DE', {
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      year: 'numeric'
     });
   };
+
+  if (selectedBook) {
+    const bookPages = getBookPages(selectedBook);
+    
+    return (
+      <div className="library-container">
+        <div className="book-detail-header">
+          <button 
+            onClick={() => setSelectedBook(null)}
+            className="back-button"
+            type="button"
+          >
+            <ArrowLeft size={20} />
+            Zurück zur Bibliothek
+          </button>
+        </div>
+
+        <div className="book-detail-content">
+          <div className="book-detail-info">
+            {selectedBook.cover && (
+              <div className="book-detail-cover">
+                <img src={selectedBook.cover} alt={selectedBook.name} />
+              </div>
+            )}
+            <h1>{selectedBook.name}</h1>
+            <p className="book-page-count">{bookPages.length} Vokabelseiten</p>
+          </div>
+
+          <div className="book-pages-section">
+            <h2>Zugeordnete Vokabelseiten</h2>
+            {bookPages.length === 0 ? (
+              <div className="empty-book-state">
+                <BookOpen size={48} strokeWidth={1.5} />
+                <p>Noch keine Vokabelseiten zugeordnet</p>
+                <p className="hint">Gehen Sie zurück zur Bibliothek und ziehen Sie Seiten per Drag & Drop auf dieses Buch</p>
+              </div>
+            ) : (
+              <div className="book-pages-grid">
+                {bookPages.map((page) => (
+                  <div key={page.id} className="book-page-card">
+                    {page.imagePreview && (
+                      <div className="book-page-image">
+                        <img src={page.imagePreview} alt={page.name} />
+                      </div>
+                    )}
+                    <div className="book-page-info">
+                      <h3>{page.name}</h3>
+                      <span className="vocab-count">
+                        {page.vocabularyPairs.length} Vokabelpaare
+                      </span>
+                      <button
+                        onClick={() => handleRemovePageFromBook(selectedBook.id, page.id)}
+                        className="remove-page-btn"
+                        title="Seite entfernen"
+                        type="button"
+                      >
+                        <X size={16} />
+                        Entfernen
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const unassignedPages = getUnassignedPages();
 
   return (
     <div className="library-container">
@@ -266,118 +221,165 @@ function Library() {
           <LibraryIcon size={32} />
           <div>
             <h1>Vokabelbibliothek</h1>
-            <p>Alle gespeicherten Vokabellisten und Scans</p>
+            <p>Verwalten Sie Ihre Bücher und Vokabelseiten</p>
           </div>
         </div>
+        <button 
+          onClick={() => setShowCreateBookDialog(true)}
+          className="create-book-btn"
+          type="button"
+        >
+          <Plus size={20} />
+          Neues Buch erstellen
+        </button>
       </div>
 
-      {vocabularyLists.length === 0 ? (
+      {books.length === 0 && vocabularyPages.length === 0 ? (
         <div className="empty-state">
           <BookOpen size={64} strokeWidth={1.5} />
-          <h2>Keine Vokabellisten vorhanden</h2>
-          <p>Erstellen Sie Ihre erste Vokabelliste auf der Scan Page</p>
+          <h2>Keine Bücher oder Vokabelseiten vorhanden</h2>
+          <p>Erstellen Sie Ihr erstes Buch oder scannen Sie Vokabelseiten auf der Scan Page</p>
         </div>
       ) : (
-        <div className="library-content">
-          <div className="lists-sidebar">
-            <h2>Gespeicherte Listen ({vocabularyLists.length})</h2>
-            <div className="lists-grid">
-              {vocabularyLists.map((list) => (
-                <div
-                  key={list.id}
-                  className={`list-card ${selectedList?.id === list.id ? 'active' : ''}`}
-                  onClick={() => setSelectedList(list)}
-                >
-                  {list.imagePreview && (
-                    <div className="list-card-image">
-                      <img src={list.imagePreview} alt={list.name} />
+        <div className="library-grid">
+          {books.length > 0 && (
+            <div className="books-section">
+              <h2>Meine Bücher ({books.length})</h2>
+              <div className="books-grid">
+                {books.map((book) => (
+                  <div
+                    key={book.id}
+                    className="book-card"
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDropOnBook(e, book)}
+                  >
+                    <div 
+                      className="book-card-content"
+                      onClick={() => setSelectedBook(book)}
+                    >
+                      {book.cover ? (
+                        <div className="book-cover">
+                          <img src={book.cover} alt={book.name} />
+                        </div>
+                      ) : (
+                        <div className="book-cover-placeholder">
+                          <BookOpen size={48} strokeWidth={1.5} />
+                        </div>
+                      )}
+                      <div className="book-card-info">
+                        <h3>{book.name}</h3>
+                        <span className="book-page-count">
+                          {book.pageIds.length} Seiten
+                        </span>
+                      </div>
                     </div>
-                  )}
-                  <div className="list-card-header">
-                    <h3>{list.name}</h3>
-                    <div className="list-actions">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteList(list.id);
-                        }}
-                        className="delete-btn"
-                        title="Liste löschen"
-                        type="button"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteBook(book.id);
+                      }}
+                      className="delete-book-btn"
+                      title="Buch löschen"
+                      type="button"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
-                  <div className="list-card-info">
-                    <span className="vocab-count">
-                      {list.vocabularyPairs.length} Vokabelpaare
-                    </span>
-                    <span className="created-date">
-                      {formatDate(list.createdAt)}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="vocabulary-display">
-            {selectedList ? (
-              <>
-                <div className="display-header">
-                  <h2>{selectedList.name}</h2>
-                  <div className="header-actions">
-                    <span className="vocab-count-badge">
-                      {selectedList.vocabularyPairs.length} Vokabelpaare
-                    </span>
-                    {pdfBlobUrl && (
-                      <button 
-                        onClick={handleDownloadPDF}
-                        className="download-btn-primary"
-                        type="button"
-                      >
-                        <Download size={18} />
-                        PDF herunterladen
-                      </button>
+          {unassignedPages.length > 0 && (
+            <div className="unassigned-pages-section">
+              <h2>Nicht zugeordnete Vokabelseiten ({unassignedPages.length})</h2>
+              <p className="section-hint">Ziehen Sie Seiten per Drag & Drop auf ein Buch, um sie zuzuordnen</p>
+              <div className="pages-grid">
+                {unassignedPages.map((page) => (
+                  <div
+                    key={page.id}
+                    className="page-card"
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, page)}
+                  >
+                    {page.imagePreview && (
+                      <div className="page-card-image">
+                        <img src={page.imagePreview} alt={page.name} />
+                      </div>
                     )}
-                  </div>
-                </div>
-
-                {selectedList.imagePreview && (
-                  <div className="scanned-image-section">
-                    <h3 className="section-title">📸 Gescanntes Bild</h3>
-                    <div className="scanned-image-container">
-                      <img src={selectedList.imagePreview} alt={selectedList.name} />
+                    <div className="page-card-info">
+                      <h3>{page.name}</h3>
+                      <span className="vocab-count">
+                        {page.vocabularyPairs.length} Vokabelpaare
+                      </span>
+                      <span className="created-date">
+                        {formatDate(page.createdAt)}
+                      </span>
                     </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {showCreateBookDialog && (
+        <div className="dialog-overlay" onClick={() => setShowCreateBookDialog(false)}>
+          <div className="dialog-content" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-header">
+              <h2>Neues Buch erstellen</h2>
+              <button
+                onClick={() => setShowCreateBookDialog(false)}
+                className="dialog-close"
+                type="button"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="dialog-body">
+              <div className="form-group">
+                <label htmlFor="book-name">Buchname *</label>
+                <input
+                  id="book-name"
+                  type="text"
+                  value={newBookName}
+                  onChange={(e) => setNewBookName(e.target.value)}
+                  placeholder="z.B. English G21 - Unit 1"
+                  autoFocus
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="book-cover">Cover (optional)</label>
+                <input
+                  id="book-cover"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleCoverUpload}
+                />
+                {newBookCover && (
+                  <div className="cover-preview">
+                    <img src={newBookCover} alt="Cover Vorschau" />
                   </div>
                 )}
-
-                <div className="vocabulary-table-section">
-                  <h3 className="section-title">📚 Vokabelliste</h3>
-                  <div className="vocabulary-table">
-                    <div className="table-header">
-                      <div className="header-cell">Deutsch</div>
-                      <div className="header-cell">Englisch</div>
-                    </div>
-                    <div className="table-body">
-                      {selectedList.vocabularyPairs.map((pair, index) => (
-                        <div key={index} className="table-row">
-                          <div className="table-cell german">{pair.german}</div>
-                          <div className="table-cell english">{pair.english}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="select-prompt">
-                <AlertCircle size={48} strokeWidth={1.5} />
-                <h3>Wählen Sie eine Vokabelliste aus</h3>
-                <p>Klicken Sie auf eine Liste links, um die Details anzuzeigen</p>
               </div>
-            )}
+            </div>
+            <div className="dialog-footer">
+              <button
+                onClick={() => setShowCreateBookDialog(false)}
+                className="btn-secondary"
+                type="button"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={handleCreateBook}
+                className="btn-primary"
+                type="button"
+              >
+                Buch erstellen
+              </button>
+            </div>
           </div>
         </div>
       )}
