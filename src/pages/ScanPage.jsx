@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Upload, Send, ScanLine, Sparkles, AlertCircle, Loader2, Settings as SettingsIcon, Save } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import './ScanPage.css';
 
 function ScanPage() {
@@ -14,6 +14,7 @@ function ScanPage() {
   const [listName, setListName] = useState('');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const fileInputRef = useRef(null);
+  const navigate = useNavigate();
 
   const VOCABULARY_PROMPT = 'Bei diesem Bild handelt es sich um eine Vokabelliste aus einem englisch Buch. Gib die Dargestellten Vokabeln in einer CSV-Datei aus. Stelle die Vokabeln jeweils in Paaren zusammen. Erst die deutsche Vokabel, dann die englische. Ignoriere die Beschreibungen und die Lautschrift.';
 
@@ -113,9 +114,8 @@ function ScanPage() {
       existingLists.push(newList);
       localStorage.setItem('vocabulary_lists', JSON.stringify(existingLists));
 
-      alert(`Vokabelliste "${listName}" erfolgreich gespeichert! (${vocabularyPairs.length} Vokabelpaare)`);
-      setShowSaveDialog(false);
-      setListName('');
+      // Redirect to library instead of showing alert
+      navigate('/library');
       
     } catch (err) {
       console.error('Error saving vocabulary:', err);

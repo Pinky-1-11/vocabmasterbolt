@@ -34,6 +34,29 @@ function Library() {
     setVocabularyLists(lists);
   };
 
+  const calculateGradingScale = (totalPoints) => {
+    // NRW Gymnasium Notenskala (Prozentsätze)
+    const gradePercentages = [
+      { grade: '1 (sehr gut)', min: 87, max: 100 },
+      { grade: '2 (gut)', min: 73, max: 86 },
+      { grade: '3 (befriedigend)', min: 59, max: 72 },
+      { grade: '4 (ausreichend)', min: 45, max: 58 },
+      { grade: '5 (mangelhaft)', min: 18, max: 44 },
+      { grade: '6 (ungenügend)', min: 0, max: 17 }
+    ];
+
+    return gradePercentages.map(({ grade, min, max }) => {
+      const minPoints = Math.ceil((min / 100) * totalPoints);
+      const maxPoints = Math.floor((max / 100) * totalPoints);
+      return {
+        grade,
+        pointRange: minPoints === maxPoints ? `${minPoints}` : `${minPoints} - ${maxPoints}`,
+        minPoints,
+        maxPoints
+      };
+    });
+  };
+
   const generatePDF = (list) => {
     if (!list || !list.vocabularyPairs || list.vocabularyPairs.length === 0) {
       return;
@@ -105,6 +128,85 @@ function Library() {
 
         currentY += lineHeight;
       });
+
+      // Add grading scale section
+      const totalPoints = list.vocabularyPairs.length;
+      const gradingScale = calculateGradingScale(totalPoints);
+
+      // Add some space before grading scale
+      currentY += 15;
+
+      // Check if we need a new page for grading scale
+      const gradingScaleHeight = 80; // Approximate height needed
+      if (currentY + gradingScaleHeight > pageHeight - 20) {
+        doc.addPage();
+        currentY = 30;
+      }
+
+      // Grading scale title
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Bewertungsschlüssel (NRW Gymnasium)', margin, currentY);
+      currentY += 10;
+
+      // Total points info
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Gesamtpunktzahl: ${totalPoints} Punkte`, margin, currentY);
+      currentY += 8;
+
+      // Grading scale table
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      
+      // Table headers
+      const col1X = margin;
+      const col2X = margin + 50;
+      doc.text('Note', col1X, currentY);
+      doc.text('Punkte', col2X, currentY);
+      currentY += 2;
+
+      // Header line
+      doc.setLineWidth(0.5);
+      doc.setDrawColor(100, 100, 100);
+      doc.line(margin, currentY, margin + 100, currentY);
+      currentY += 5;
+
+      // Table rows
+      doc.setFont('helvetica', 'normal');
+      gradingScale.forEach((item) => {
+        doc.text(item.grade, col1X, currentY);
+        doc.text(item.pointRange, col2X, currentY);
+        currentY += 6;
+      });
+
+      // Add fields for grade and error count
+      currentY += 10;
+
+      // Box for results
+      doc.setLineWidth(0.5);
+      doc.setDrawColor(100, 100, 100);
+      doc.rect(margin, currentY, pageWidth - 2 * margin, 25);
+
+      currentY += 8;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      
+      // Note field
+      doc.text('Note:', margin + 5, currentY);
+      doc.setFont('helvetica', 'normal');
+      doc.line(margin + 25, currentY + 1, margin + 60, currentY + 1);
+
+      // Fehleranzahl field
+      doc.text('Fehleranzahl:', pageWidth / 2 + 10, currentY);
+      doc.line(pageWidth / 2 + 45, currentY + 1, pageWidth / 2 + 80, currentY + 1);
+
+      currentY += 10;
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'italic');
+      doc.text('Erreichte Punktzahl:', margin + 5, currentY);
+      doc.setFont('helvetica', 'normal');
+      doc.line(margin + 45, currentY + 1, margin + 80, currentY + 1);
 
       const pdfOutput = doc.output('arraybuffer');
       const pdfBlob = new Blob([pdfOutput], { type: 'application/pdf' });
