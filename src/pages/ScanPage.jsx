@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Upload, Send, ScanLine, Sparkles, AlertCircle, Loader2, Settings as SettingsIcon, Save } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 import './ScanPage.css';
 
 function ScanPage() {
@@ -19,11 +20,30 @@ function ScanPage() {
   const VOCABULARY_PROMPT = 'Bei diesem Bild handelt es sich um eine Vokabelliste aus einem englisch Buch. Gib die Dargestellten Vokabeln in einer CSV-Datei aus. Stelle die Vokabeln jeweils in Paaren zusammen. Erst die deutsche Vokabel, dann die englische. Ignoriere die Beschreibungen und die Lautschrift.';
 
   useEffect(() => {
-    const savedApiKey = localStorage.getItem('gemini_api_key');
-    if (savedApiKey) {
-      setApiKey(savedApiKey);
-    }
+    loadApiKey();
   }, []);
+
+  const loadApiKey = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('api_settings')
+        .select('gemini_api_key')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error loading API key:', error);
+        return;
+      }
+
+      if (data) {
+        setApiKey(data.gemini_api_key);
+      }
+    } catch (err) {
+      console.error('Error loading API key:', err);
+    }
+  };
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -81,7 +101,7 @@ function ScanPage() {
     return vocabularyPairs;
   };
 
-  const handleSaveVocabulary = () => {
+  const handleSaveVocabulary = async () => {
     if (!listName.trim()) {
       setError('Bitte geben Sie einen Namen für die Vokabelliste ein.');
       return;
@@ -100,21 +120,17 @@ function ScanPage() {
         return;
       }
 
-      const existingLists = JSON.parse(localStorage.getItem('vocabulary_lists') || '[]');
-      
-      const newList = {
-        id: Date.now().toString(),
-        name: listName.trim(),
-        vocabularyPairs: vocabularyPairs,
-        createdAt: new Date().toISOString(),
-        csvRaw: response,
-        imagePreview: imagePreview
-      };
+      const { error: insertError } = await supabase
+        .from('vocabulary_pages')
+        .insert([{
+          name: listName.trim(),
+          vocabulary_pairs: vocabularyPairs,
+          csv_raw: response,
+          image_preview: imagePreview
+        }]);
 
-      existingLists.push(newList);
-      localStorage.setItem('vocabulary_lists', JSON.stringify(existingLists));
+      if (insertError) throw insertError;
 
-      // Redirect to library instead of showing alert
       navigate('/library');
       
     } catch (err) {

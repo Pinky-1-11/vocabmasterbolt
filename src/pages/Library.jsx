@@ -1,49 +1,86 @@
 import React, { useState, useEffect } from 'react';
-import { Library as LibraryIcon, Plus, BookOpen, AlertCircle, ArrowLeft, Trash2, X } from 'lucide-react';
+import { Library as LibraryIcon, Plus, BookOpen, ArrowLeft, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 import './Library.css';
 
 function Library() {
   const navigate = useNavigate();
   const [books, setBooks] = useState([]);
   const [vocabularyPages, setVocabularyPages] = useState([]);
+  const [bookPages, setBookPages] = useState([]);
   const [selectedBook, setSelectedBook] = useState(null);
   const [showCreateBookDialog, setShowCreateBookDialog] = useState(false);
   const [newBookName, setNewBookName] = useState('');
   const [newBookCover, setNewBookCover] = useState(null);
   const [draggedPage, setDraggedPage] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadData();
   }, []);
 
-  const loadData = () => {
-    const savedBooks = JSON.parse(localStorage.getItem('vocabulary_books') || '[]');
-    const savedPages = JSON.parse(localStorage.getItem('vocabulary_lists') || '[]');
-    setBooks(savedBooks);
-    setVocabularyPages(savedPages);
+  const loadData = async () => {
+    try {
+      setLoading(true);
+
+      // Load books
+      const { data: booksData, error: booksError } = await supabase
+        .from('books')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (booksError) throw booksError;
+
+      // Load vocabulary pages
+      const { data: pagesData, error: pagesError } = await supabase
+        .from('vocabulary_pages')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (pagesError) throw pagesError;
+
+      // Load book-page relationships
+      const { data: relationshipsData, error: relationshipsError } = await supabase
+        .from('book_pages')
+        .select('*');
+
+      if (relationshipsError) throw relationshipsError;
+
+      setBooks(booksData || []);
+      setVocabularyPages(pagesData || []);
+      setBookPages(relationshipsData || []);
+    } catch (err) {
+      console.error('Error loading data:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleCreateBook = () => {
+  const handleCreateBook = async () => {
     if (!newBookName.trim()) {
       alert('Bitte geben Sie einen Buchnamen ein');
       return;
     }
 
-    const newBook = {
-      id: Date.now().toString(),
-      name: newBookName.trim(),
-      cover: newBookCover,
-      pageIds: [],
-      createdAt: new Date().toISOString()
-    };
+    try {
+      const { error } = await supabase
+        .from('books')
+        .insert([{
+          name: newBookName.trim(),
+          cover_image: newBookCover
+        }]);
 
-    const updatedBooks = [...books, newBook];
-    localStorage.setItem('vocabulary_books', JSON.stringify(updatedBooks));
-    setBooks(updatedBooks);
-    setShowCreateBookDialog(false);
-    setNewBookName('');
-    setNewBookCover(null);
+      if (error) throw error;
+
+      await loadData();
+      setShowCreateBookDialog(false);
+      setNewBookName('');
+      setNewBookCover(null);
+    } catch (err) {
+      console.error('Error creating book:', err);
+      alert('Fehler beim Erstellen des Buches');
+    }
   };
 
   const handleCoverUpload = (e) => {
@@ -67,71 +104,100 @@ function Library() {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDropOnBook = (e, book) => {
+  const handleDropOnBook = async (e, book) => {
     e.preventDefault();
     if (!draggedPage) return;
 
-    // Check if page is already assigned to this book
-    if (book.pageIds.includes(draggedPage.id)) {
-      setDraggedPage(null);
-      return;
-    }
+    try {
+      // Check if relationship already exists
+      const existingRelationship = bookPages.find(
+        bp => bp.book_id === book.id && bp.page_id === draggedPage.id
+      );
 
-    // Remove page from other books
-    const updatedBooks = books.map(b => ({
-      ...b,
-      pageIds: b.pageIds.filter(id => id !== draggedPage.id)
-    }));
-
-    // Add page to target book
-    const targetBook = updatedBooks.find(b => b.id === book.id);
-    if (targetBook) {
-      targetBook.pageIds.push(draggedPage.id);
-    }
-
-    localStorage.setItem('vocabulary_books', JSON.stringify(updatedBooks));
-    setBooks(updatedBooks);
-    setDraggedPage(null);
-  };
-
-  const handleRemovePageFromBook = (bookId, pageId) => {
-    const updatedBooks = books.map(book => {
-      if (book.id === bookId) {
-        return {
-          ...book,
-          pageIds: book.pageIds.filter(id => id !== pageId)
-        };
+      if (existingRelationship) {
+        setDraggedPage(null);
+        return;
       }
-      return book;
-    });
 
-    localStorage.setItem('vocabulary_books', JSON.stringify(updatedBooks));
-    setBooks(updatedBooks);
+      // Remove page from other books
+      const relationshipsToDelete = bookPages.filter(bp => bp.page_id === draggedPage.id);
+      
+      if (relationshipsToDelete.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('book_pages')
+          .delete()
+          .in('id', relationshipsToDelete.map(r => r.id));
+
+        if (deleteError) throw deleteError;
+      }
+
+      // Add page to target book
+      const { error: insertError } = await supabase
+        .from('book_pages')
+        .insert([{
+          book_id: book.id,
+          page_id: draggedPage.id
+        }]);
+
+      if (insertError) throw insertError;
+
+      await loadData();
+      setDraggedPage(null);
+    } catch (err) {
+      console.error('Error updating book pages:', err);
+      alert('Fehler beim Zuordnen der Seite');
+    }
   };
 
-  const handleDeleteBook = (bookId) => {
+  const handleRemovePageFromBook = async (bookId, pageId) => {
+    try {
+      const { error } = await supabase
+        .from('book_pages')
+        .delete()
+        .eq('book_id', bookId)
+        .eq('page_id', pageId);
+
+      if (error) throw error;
+
+      await loadData();
+    } catch (err) {
+      console.error('Error removing page from book:', err);
+      alert('Fehler beim Entfernen der Seite');
+    }
+  };
+
+  const handleDeleteBook = async (bookId) => {
     if (window.confirm('Möchten Sie dieses Buch wirklich löschen? Die Vokabelseiten bleiben erhalten.')) {
-      const updatedBooks = books.filter(book => book.id !== bookId);
-      localStorage.setItem('vocabulary_books', JSON.stringify(updatedBooks));
-      setBooks(updatedBooks);
-      if (selectedBook?.id === bookId) {
-        setSelectedBook(null);
+      try {
+        const { error } = await supabase
+          .from('books')
+          .delete()
+          .eq('id', bookId);
+
+        if (error) throw error;
+
+        await loadData();
+        if (selectedBook?.id === bookId) {
+          setSelectedBook(null);
+        }
+      } catch (err) {
+        console.error('Error deleting book:', err);
+        alert('Fehler beim Löschen des Buches');
       }
     }
   };
 
   const getUnassignedPages = () => {
-    const assignedPageIds = new Set();
-    books.forEach(book => {
-      book.pageIds.forEach(id => assignedPageIds.add(id));
-    });
+    const assignedPageIds = new Set(bookPages.map(bp => bp.page_id));
     return vocabularyPages.filter(page => !assignedPageIds.has(page.id));
   };
 
   const getBookPages = (book) => {
-    return book.pageIds
-      .map(id => vocabularyPages.find(page => page.id === id))
-      .filter(page => page !== undefined);
+    const pageIds = bookPages
+      .filter(bp => bp.book_id === book.id)
+      .map(bp => bp.page_id);
+    
+    return vocabularyPages.filter(page => pageIds.includes(page.id));
   };
 
   const formatDate = (dateString) => {
@@ -143,8 +209,16 @@ function Library() {
     });
   };
 
+  if (loading) {
+    return (
+      <div className="library-container">
+        <p>Lade Bibliothek...</p>
+      </div>
+    );
+  }
+
   if (selectedBook) {
-    const bookPages = getBookPages(selectedBook);
+    const bookPagesData = getBookPages(selectedBook);
     
     return (
       <div className="library-container">
@@ -161,18 +235,18 @@ function Library() {
 
         <div className="book-detail-content">
           <div className="book-detail-info">
-            {selectedBook.cover && (
+            {selectedBook.cover_image && (
               <div className="book-detail-cover">
-                <img src={selectedBook.cover} alt={selectedBook.name} />
+                <img src={selectedBook.cover_image} alt={selectedBook.name} />
               </div>
             )}
             <h1>{selectedBook.name}</h1>
-            <p className="book-page-count">{bookPages.length} Vokabelseiten</p>
+            <p className="book-page-count">{bookPagesData.length} Vokabelseiten</p>
           </div>
 
           <div className="book-pages-section">
             <h2>Zugeordnete Vokabelseiten</h2>
-            {bookPages.length === 0 ? (
+            {bookPagesData.length === 0 ? (
               <div className="empty-book-state">
                 <BookOpen size={48} strokeWidth={1.5} />
                 <p>Noch keine Vokabelseiten zugeordnet</p>
@@ -180,17 +254,17 @@ function Library() {
               </div>
             ) : (
               <div className="book-pages-grid">
-                {bookPages.map((page) => (
+                {bookPagesData.map((page) => (
                   <div key={page.id} className="book-page-card">
-                    {page.imagePreview && (
+                    {page.image_preview && (
                       <div className="book-page-image">
-                        <img src={page.imagePreview} alt={page.name} />
+                        <img src={page.image_preview} alt={page.name} />
                       </div>
                     )}
                     <div className="book-page-info">
                       <h3>{page.name}</h3>
                       <span className="vocab-count">
-                        {page.vocabularyPairs.length} Vokabelpaare
+                        {page.vocabulary_pairs?.length || 0} Vokabelpaare
                       </span>
                       <button
                         onClick={() => handleRemovePageFromBook(selectedBook.id, page.id)}
@@ -257,9 +331,9 @@ function Library() {
                       className="book-card-content"
                       onClick={() => setSelectedBook(book)}
                     >
-                      {book.cover ? (
+                      {book.cover_image ? (
                         <div className="book-cover">
-                          <img src={book.cover} alt={book.name} />
+                          <img src={book.cover_image} alt={book.name} />
                         </div>
                       ) : (
                         <div className="book-cover-placeholder">
@@ -269,7 +343,7 @@ function Library() {
                       <div className="book-card-info">
                         <h3>{book.name}</h3>
                         <span className="book-page-count">
-                          {book.pageIds.length} Seiten
+                          {getBookPages(book).length} Seiten
                         </span>
                       </div>
                     </div>
@@ -302,18 +376,18 @@ function Library() {
                     draggable
                     onDragStart={(e) => handleDragStart(e, page)}
                   >
-                    {page.imagePreview && (
+                    {page.image_preview && (
                       <div className="page-card-image">
-                        <img src={page.imagePreview} alt={page.name} />
+                        <img src={page.image_preview} alt={page.name} />
                       </div>
                     )}
                     <div className="page-card-info">
                       <h3>{page.name}</h3>
                       <span className="vocab-count">
-                        {page.vocabularyPairs.length} Vokabelpaare
+                        {page.vocabulary_pairs?.length || 0} Vokabelpaare
                       </span>
                       <span className="created-date">
-                        {formatDate(page.createdAt)}
+                        {formatDate(page.created_at)}
                       </span>
                     </div>
                   </div>
