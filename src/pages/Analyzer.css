@@ -1,0 +1,216 @@
+.warning-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 16px;
+  color: #ef4444;
+  margin-bottom: 2rem;
+  backdrop-filter: blur(10px);
+  animation: slideDown 0.3s ease;
+}
+
+.settings-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  padding: 0.5rem 1rem;
+  background: rgba(158, 127, 255, 0.2);
+  border: 1px solid rgba(158, 127, 255, 0.3);
+  border-radius: 8px;
+  color: #9E7FFF;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.settings-link:hover {
+  background: rgba(158, 127, 255, 0.3);
+  border-color: #9E7FFF;
+  transform: translateY(-2px);
+}
+
+.info-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 16px;
+  color: #38bdf8;
+  margin-bottom: 2rem;
+  backdrop-filter: blur(10px);
+  animation: slideDown 0.3s ease;
+}
+
+.info-content {
+  flex: 1;
+}
+
+.info-content strong {
+  display: block;
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+  color: #FFFFFF;
+}
+
+.info-content p {
+  color: #A3A3A3;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.csv-output {
+  background: rgba(23, 23, 23, 0.8);
+  border: 1px solid rgba(158, 127, 255, 0.2);
+  border-radius: 12px;
+  padding: 1.5rem;
+  color: #FFFFFF;
+  font-family: 'Courier New', monospace;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.copy-btn,
+.save-btn {
+  flex: 1;
+  min-width: 200px;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.copy-btn {
+  background: rgba(158, 127, 255, 0.2);
+  border: 1px solid rgba(158, 127, 255, 0.3);
+  color: #9E7FFF;
+}
+
+.copy-btn:hover {
+  background: rgba(158, 127, 255, 0.3);
+  border-color: #9E7FFF;
+  transform: translateY(-2px);
+}
+
+.save-btn {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+}
+
+.save-btn:hover {
+  background: rgba(16, 185, 129, 0.3);
+  border-color: #10b981;
+  transform: translateY(-2px);
+}
+
+.save-dialog {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: rgba(38, 38, 38, 0.8);
+  border: 1px solid rgba(158, 127, 255, 0.3);
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
+  animation: slideDown 0.3s ease;
+}
+
+.save-dialog h3 {
+  color: #FFFFFF;
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+}
+
+.list-name-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: rgba(23, 23, 23, 0.8);
+  border: 1px solid rgba(158, 127, 255, 0.3);
+  border-radius: 12px;
+  color: #FFFFFF;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  transition: all 0.3s ease;
+}
+
+.list-name-input:focus {
+  outline: none;
+  border-color: #9E7FFF;
+  box-shadow: 0 0 0 3px rgba(158, 127, 255, 0.1);
+}
+
+.list-name-input::placeholder {
+  color: #A3A3A3;
+}
+
+.dialog-buttons {
+  display: flex;
+  gap: 1rem;
+}
+
+.cancel-btn,
+.confirm-save-btn {
+  flex: 1;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.cancel-btn {
+  background: rgba(163, 163, 163, 0.2);
+  border: 1px solid rgba(163, 163, 163, 0.3);
+  color: #A3A3A3;
+}
+
+.cancel-btn:hover {
+  background: rgba(163, 163, 163, 0.3);
+  border-color: #A3A3A3;
+}
+
+.confirm-save-btn {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+}
+
+.confirm-save-btn:hover {
+  background: rgba(16, 185, 129, 0.3);
+  border-color: #10b981;
+  transform: translateY(-2px);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
