@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Library as LibraryIcon, Trash2, BookOpen, AlertCircle, Download, ExternalLink } from 'lucide-react';
+import { Library as LibraryIcon, Trash2, BookOpen, AlertCircle, Download } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import './Library.css';
 
@@ -7,26 +7,21 @@ function Library() {
   const [vocabularyLists, setVocabularyLists] = useState([]);
   const [selectedList, setSelectedList] = useState(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
-  const [pdfDisplayMethod, setPdfDisplayMethod] = useState(null); // 'object', 'download', 'error'
 
   useEffect(() => {
     loadVocabularyLists();
   }, []);
 
-  // PDF automatisch generieren wenn Liste ausgewählt wird
   useEffect(() => {
     if (selectedList) {
       generatePDF(selectedList);
     } else {
-      // Cleanup wenn keine Liste ausgewählt
       if (pdfBlobUrl) {
         URL.revokeObjectURL(pdfBlobUrl);
         setPdfBlobUrl(null);
-        setPdfDisplayMethod(null);
       }
     }
 
-    // Cleanup beim Unmount
     return () => {
       if (pdfBlobUrl) {
         URL.revokeObjectURL(pdfBlobUrl);
@@ -40,16 +35,11 @@ function Library() {
   };
 
   const generatePDF = (list) => {
-    console.log('=== GENERATING PDF WITH CHROME COMPATIBILITY ===');
-    
     if (!list || !list.vocabularyPairs || list.vocabularyPairs.length === 0) {
-      console.error('No vocabulary pairs found!');
-      setPdfDisplayMethod('error');
       return;
     }
 
     try {
-      console.log('Creating jsPDF instance...');
       const doc = new jsPDF();
       
       const pageWidth = doc.internal.pageSize.getWidth();
@@ -64,17 +54,14 @@ function Library() {
       let currentY = startY;
 
       const addHeader = () => {
-        // Titel
         doc.setFontSize(20);
         doc.setFont('helvetica', 'bold');
         doc.text('Vokabeltest', pageWidth / 2, 20, { align: 'center' });
 
-        // Listenname
         doc.setFontSize(14);
         doc.setFont('helvetica', 'normal');
         doc.text(list.name, pageWidth / 2, 32, { align: 'center' });
 
-        // Datum
         doc.setFontSize(10);
         const dateStr = new Date().toLocaleDateString('de-DE', {
           day: '2-digit',
@@ -83,43 +70,35 @@ function Library() {
         });
         doc.text(`Datum: ${dateStr}`, pageWidth / 2, 42, { align: 'center' });
 
-        // Spaltenüberschriften
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.text('Deutsch', margin, 52);
         doc.text('Englisch (zum Ausfüllen)', rightColumnStart, 52);
 
-        // Trennlinie unter Überschriften
         doc.setLineWidth(0.5);
         doc.setDrawColor(100, 100, 100);
         doc.line(margin, 54, pageWidth - margin, 54);
       };
 
-      // Erste Seite Header
       addHeader();
 
-      // Vokabeln durchgehen
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(11);
 
       list.vocabularyPairs.forEach((pair, index) => {
-        // Neue Seite wenn nötig
         if (index > 0 && index % maxLinesPerPage === 0) {
           doc.addPage();
           currentY = startY;
           addHeader();
         }
 
-        // Deutsche Vokabel (links)
         doc.setFont('helvetica', 'bold');
         doc.text(`${index + 1}. ${pair.german}`, margin, currentY);
 
-        // Linie zum Ausfüllen (rechts)
         doc.setDrawColor(200, 200, 200);
         doc.setLineWidth(0.3);
         doc.line(rightColumnStart, currentY + 1, pageWidth - margin, currentY + 1);
 
-        // Vertikale Trennlinie zwischen Spalten
         doc.setDrawColor(150, 150, 150);
         doc.setLineWidth(0.2);
         doc.line(margin + leftColumnWidth + 5, currentY - 8, margin + leftColumnWidth + 5, currentY + 2);
@@ -127,67 +106,33 @@ function Library() {
         currentY += lineHeight;
       });
 
-      // PDF als Blob erstellen mit EXPLIZITEM MIME-TYPE
-      console.log('Creating PDF blob with explicit MIME type...');
       const pdfOutput = doc.output('arraybuffer');
       const pdfBlob = new Blob([pdfOutput], { type: 'application/pdf' });
-      console.log('PDF blob created:', pdfBlob);
-      console.log('Blob type:', pdfBlob.type);
-      console.log('Blob size:', pdfBlob.size, 'bytes');
       
-      // Alten Blob URL aufräumen
       if (pdfBlobUrl) {
         URL.revokeObjectURL(pdfBlobUrl);
       }
 
-      // Neuen Blob URL erstellen
       const blobUrl = URL.createObjectURL(pdfBlob);
-      console.log('Blob URL created:', blobUrl);
-      
-      // State aktualisieren
       setPdfBlobUrl(blobUrl);
-      setPdfDisplayMethod('object'); // Versuche zuerst object-Tag
-      
-      console.log('=== PDF GENERATION COMPLETE ===');
       
     } catch (error) {
-      console.error('=== PDF GENERATION ERROR ===');
-      console.error('Error details:', error);
-      console.error('Error stack:', error.stack);
-      setPdfDisplayMethod('error');
+      console.error('PDF generation error:', error);
     }
   };
 
-  const handleManualDownload = () => {
-    if (!pdfBlobUrl) return;
+  const handleDownloadPDF = () => {
+    if (!pdfBlobUrl || !selectedList) return;
     
-    console.log('=== MANUAL DOWNLOAD TRIGGERED ===');
-    
-    try {
-      // Erstelle temporären Link
-      const link = document.createElement('a');
-      link.href = pdfBlobUrl;
-      link.download = `${selectedList.name}_Vokabeltest.pdf`;
-      link.target = '_blank'; // Öffne in neuem Tab
-      
-      // Füge zum DOM hinzu (für Firefox)
-      document.body.appendChild(link);
-      
-      // Trigger Download
-      link.click();
-      
-      // Cleanup
-      setTimeout(() => {
-        document.body.removeChild(link);
-      }, 100);
-      
-      console.log('Download triggered successfully');
-      setPdfDisplayMethod('download');
-      
-    } catch (error) {
-      console.error('Download error:', error);
-      setPdfDisplayMethod('error');
-    }
+    const link = document.createElement('a');
+    link.href = pdfBlobUrl;
+    link.download = `${selectedList.name}_Vokabeltest.pdf`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+    }, 100);
   };
 
   const handleDeleteList = (listId) => {
@@ -219,7 +164,7 @@ function Library() {
           <LibraryIcon size={32} />
           <div>
             <h1>Vokabelbibliothek</h1>
-            <p>Alle gespeicherten Vokabellisten</p>
+            <p>Alle gespeicherten Vokabellisten und Scans</p>
           </div>
         </div>
       </div>
@@ -228,7 +173,7 @@ function Library() {
         <div className="empty-state">
           <BookOpen size={64} strokeWidth={1.5} />
           <h2>Keine Vokabellisten vorhanden</h2>
-          <p>Erstellen Sie Ihre erste Vokabelliste im Extraktor</p>
+          <p>Erstellen Sie Ihre erste Vokabelliste auf der Scan Page</p>
         </div>
       ) : (
         <div className="library-content">
@@ -241,6 +186,11 @@ function Library() {
                   className={`list-card ${selectedList?.id === list.id ? 'active' : ''}`}
                   onClick={() => setSelectedList(list)}
                 >
+                  {list.imagePreview && (
+                    <div className="list-card-image">
+                      <img src={list.imagePreview} alt={list.name} />
+                    </div>
+                  )}
                   <div className="list-card-header">
                     <h3>{list.name}</h3>
                     <div className="list-actions">
@@ -279,73 +229,28 @@ function Library() {
                     <span className="vocab-count-badge">
                       {selectedList.vocabularyPairs.length} Vokabelpaare
                     </span>
+                    {pdfBlobUrl && (
+                      <button 
+                        onClick={handleDownloadPDF}
+                        className="download-btn-primary"
+                        type="button"
+                      >
+                        <Download size={18} />
+                        PDF herunterladen
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {/* PDF VIEWER WITH FALLBACK STRATEGIES */}
-                {pdfBlobUrl && (
-                  <div className="pdf-viewer-container">
-                    <div className="pdf-viewer-header">
-                      <h3>📄 Vokabeltest-Vorschau</h3>
-                      
-                      {pdfDisplayMethod === 'object' && (
-                        <p className="pdf-hint">
-                          <strong>Embedded-Ansicht:</strong> Die PDF wird direkt angezeigt. 
-                          Falls die Anzeige nicht funktioniert, nutzen Sie den Download-Button unten.
-                        </p>
-                      )}
-                      
-                      {pdfDisplayMethod === 'download' && (
-                        <p className="pdf-hint success">
-                          <strong>✓ Download gestartet:</strong> Die PDF wurde in einem neuen Tab geöffnet.
-                        </p>
-                      )}
-                      
-                      {pdfDisplayMethod === 'error' && (
-                        <p className="pdf-hint error">
-                          <strong>⚠ Fehler:</strong> PDF konnte nicht generiert werden.
-                        </p>
-                      )}
-
-                      <div className="pdf-actions">
-                        <button 
-                          onClick={handleManualDownload}
-                          className="download-btn-primary"
-                          type="button"
-                        >
-                          <Download size={18} />
-                          PDF in neuem Tab öffnen
-                        </button>
-                      </div>
+                {selectedList.imagePreview && (
+                  <div className="scanned-image-section">
+                    <h3 className="section-title">📸 Gescanntes Bild</h3>
+                    <div className="scanned-image-container">
+                      <img src={selectedList.imagePreview} alt={selectedList.name} />
                     </div>
-
-                    {/* PRIMARY: OBJECT TAG (Chrome-kompatibel) */}
-                    {pdfDisplayMethod === 'object' && (
-                      <object
-                        data={pdfBlobUrl}
-                        type="application/pdf"
-                        className="pdf-viewer-object"
-                        aria-label="Vokabeltest PDF Vorschau"
-                      >
-                        <div className="pdf-fallback-message">
-                          <ExternalLink size={48} strokeWidth={1.5} />
-                          <h4>PDF kann nicht angezeigt werden</h4>
-                          <p>Ihr Browser unterstützt keine eingebetteten PDFs.</p>
-                          <button 
-                            onClick={handleManualDownload}
-                            className="download-btn-fallback"
-                            type="button"
-                          >
-                            <Download size={18} />
-                            PDF in neuem Tab öffnen
-                          </button>
-                        </div>
-                      </object>
-                    )}
                   </div>
                 )}
 
-                {/* VOCABULARY TABLE */}
                 <div className="vocabulary-table-section">
                   <h3 className="section-title">📚 Vokabelliste</h3>
                   <div className="vocabulary-table">
@@ -368,7 +273,7 @@ function Library() {
               <div className="select-prompt">
                 <AlertCircle size={48} strokeWidth={1.5} />
                 <h3>Wählen Sie eine Vokabelliste aus</h3>
-                <p>Klicken Sie auf eine Liste links, um die Vokabeln und PDF-Vorschau anzuzeigen</p>
+                <p>Klicken Sie auf eine Liste links, um die Details anzuzeigen</p>
               </div>
             )}
           </div>
