@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Library as LibraryIcon, Trash2, BookOpen, AlertCircle } from 'lucide-react';
+import { Library as LibraryIcon, Trash2, BookOpen, AlertCircle, Download, ExternalLink } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import './Library.css';
 
@@ -7,6 +7,7 @@ function Library() {
   const [vocabularyLists, setVocabularyLists] = useState([]);
   const [selectedList, setSelectedList] = useState(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
+  const [pdfDisplayMethod, setPdfDisplayMethod] = useState(null); // 'object', 'download', 'error'
 
   useEffect(() => {
     loadVocabularyLists();
@@ -21,6 +22,7 @@ function Library() {
       if (pdfBlobUrl) {
         URL.revokeObjectURL(pdfBlobUrl);
         setPdfBlobUrl(null);
+        setPdfDisplayMethod(null);
       }
     }
 
@@ -38,10 +40,11 @@ function Library() {
   };
 
   const generatePDF = (list) => {
-    console.log('=== GENERATING EMBEDDED PDF ===');
+    console.log('=== GENERATING PDF WITH CHROME COMPATIBILITY ===');
     
     if (!list || !list.vocabularyPairs || list.vocabularyPairs.length === 0) {
       console.error('No vocabulary pairs found!');
+      setPdfDisplayMethod('error');
       return;
     }
 
@@ -124,10 +127,13 @@ function Library() {
         currentY += lineHeight;
       });
 
-      // PDF als Blob erstellen
-      console.log('Creating PDF blob...');
-      const pdfBlob = doc.output('blob');
+      // PDF als Blob erstellen mit EXPLIZITEM MIME-TYPE
+      console.log('Creating PDF blob with explicit MIME type...');
+      const pdfOutput = doc.output('arraybuffer');
+      const pdfBlob = new Blob([pdfOutput], { type: 'application/pdf' });
       console.log('PDF blob created:', pdfBlob);
+      console.log('Blob type:', pdfBlob.type);
+      console.log('Blob size:', pdfBlob.size, 'bytes');
       
       // Alten Blob URL aufräumen
       if (pdfBlobUrl) {
@@ -138,15 +144,49 @@ function Library() {
       const blobUrl = URL.createObjectURL(pdfBlob);
       console.log('Blob URL created:', blobUrl);
       
-      // State aktualisieren für iframe
+      // State aktualisieren
       setPdfBlobUrl(blobUrl);
+      setPdfDisplayMethod('object'); // Versuche zuerst object-Tag
       
-      console.log('=== PDF EMBEDDED SUCCESSFULLY ===');
+      console.log('=== PDF GENERATION COMPLETE ===');
       
     } catch (error) {
       console.error('=== PDF GENERATION ERROR ===');
       console.error('Error details:', error);
       console.error('Error stack:', error.stack);
+      setPdfDisplayMethod('error');
+    }
+  };
+
+  const handleManualDownload = () => {
+    if (!pdfBlobUrl) return;
+    
+    console.log('=== MANUAL DOWNLOAD TRIGGERED ===');
+    
+    try {
+      // Erstelle temporären Link
+      const link = document.createElement('a');
+      link.href = pdfBlobUrl;
+      link.download = `${selectedList.name}_Vokabeltest.pdf`;
+      link.target = '_blank'; // Öffne in neuem Tab
+      
+      // Füge zum DOM hinzu (für Firefox)
+      document.body.appendChild(link);
+      
+      // Trigger Download
+      link.click();
+      
+      // Cleanup
+      setTimeout(() => {
+        document.body.removeChild(link);
+      }, 100);
+      
+      console.log('Download triggered successfully');
+      setPdfDisplayMethod('download');
+      
+    } catch (error) {
+      console.error('Download error:', error);
+      setPdfDisplayMethod('error');
     }
   };
 
@@ -242,20 +282,66 @@ function Library() {
                   </div>
                 </div>
 
-                {/* EMBEDDED PDF VIEWER */}
+                {/* PDF VIEWER WITH FALLBACK STRATEGIES */}
                 {pdfBlobUrl && (
                   <div className="pdf-viewer-container">
                     <div className="pdf-viewer-header">
                       <h3>📄 Vokabeltest-Vorschau</h3>
-                      <p className="pdf-hint">
-                        Die PDF wird direkt angezeigt. Nutzen Sie die Browser-Funktionen zum Drucken oder Speichern.
-                      </p>
+                      
+                      {pdfDisplayMethod === 'object' && (
+                        <p className="pdf-hint">
+                          <strong>Embedded-Ansicht:</strong> Die PDF wird direkt angezeigt. 
+                          Falls die Anzeige nicht funktioniert, nutzen Sie den Download-Button unten.
+                        </p>
+                      )}
+                      
+                      {pdfDisplayMethod === 'download' && (
+                        <p className="pdf-hint success">
+                          <strong>✓ Download gestartet:</strong> Die PDF wurde in einem neuen Tab geöffnet.
+                        </p>
+                      )}
+                      
+                      {pdfDisplayMethod === 'error' && (
+                        <p className="pdf-hint error">
+                          <strong>⚠ Fehler:</strong> PDF konnte nicht generiert werden.
+                        </p>
+                      )}
+
+                      <div className="pdf-actions">
+                        <button 
+                          onClick={handleManualDownload}
+                          className="download-btn-primary"
+                          type="button"
+                        >
+                          <Download size={18} />
+                          PDF in neuem Tab öffnen
+                        </button>
+                      </div>
                     </div>
-                    <iframe
-                      src={pdfBlobUrl}
-                      className="pdf-viewer-iframe"
-                      title="Vokabeltest PDF"
-                    />
+
+                    {/* PRIMARY: OBJECT TAG (Chrome-kompatibel) */}
+                    {pdfDisplayMethod === 'object' && (
+                      <object
+                        data={pdfBlobUrl}
+                        type="application/pdf"
+                        className="pdf-viewer-object"
+                        aria-label="Vokabeltest PDF Vorschau"
+                      >
+                        <div className="pdf-fallback-message">
+                          <ExternalLink size={48} strokeWidth={1.5} />
+                          <h4>PDF kann nicht angezeigt werden</h4>
+                          <p>Ihr Browser unterstützt keine eingebetteten PDFs.</p>
+                          <button 
+                            onClick={handleManualDownload}
+                            className="download-btn-fallback"
+                            type="button"
+                          >
+                            <Download size={18} />
+                            PDF in neuem Tab öffnen
+                          </button>
+                        </div>
+                      </object>
+                    )}
                   </div>
                 )}
 
